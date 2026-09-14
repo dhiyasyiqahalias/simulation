@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K-Means Clustering Simulation & Analytics Lab</title>
+  <meta name="description" content="Interactive 2D K-Means Clustering simulation with real-time Voronoi decision boundaries, K-Means++ initialization, step-by-step state machine, WCSS inertia graph, silhouette analysis, and elbow method sweep.">
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24">
+          <circle cx="6" cy="6" r="3"/>
+          <circle cx="18" cy="8" r="3"/>
+          <circle cx="12" cy="18" r="3"/>
+          <line x1="8.5" y1="7.5" x2="15.5" y2="7.5" stroke-dasharray="2 2"/>
+          <line x1="7.5" y1="8.5" x2="10.5" y2="15.5" stroke-dasharray="2 2"/>
+          <line x1="16.5" y1="10" x2="13.5" y2="15.5" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">K-Means Cluster Lab</h1>
+      </div>
+      <span class="brand-badge">Interactive 2D Simulation</span>
+    </div>
+
+    <div class="header-actions">
+      <span id="statusBadge" class="status-pill status-init">
+        <span class="pulse-dot"></span> Ready
+      </span>
+      <button id="btnInfo" class="btn btn-secondary btn-icon" data-tooltip="Algorithm Guide & Math">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main App Layout -->
+  <main class="app-layout">
+
+    <!-- Left Controls Sidebar -->
+    <aside class="sidebar sidebar-left">
+
+      <!-- Parameters Card -->
+      <section class="panel-card">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            Hyperparameters
+          </span>
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">
+            <span>Clusters (K)</span>
+            <span id="valK" class="form-label-val">4</span>
+          </div>
+          <input type="range" id="sliderK" class="range-slider" min="1" max="10" value="4">
+        </div>
+
+        <div class="form-group">
+          <label for="selectInit" class="form-label">Initialization Method</label>
+          <select id="selectInit" class="custom-select">
+            <option value="kmeans++">K-Means++ (Probabilistic D²)</option>
+            <option value="randomPoints">Random Data Points (Forgy)</option>
+            <option value="randomUniform">Random Uniform Space</option>
+            <option value="manual">Manual Placement (Click Canvas)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="selectMetric" class="form-label">Distance Metric</label>
+          <select id="selectMetric" class="custom-select">
+            <option value="euclidean">Euclidean (L2 Norm)</option>
+            <option value="manhattan">Manhattan (L1 Norm / Taxicab)</option>
+            <option value="chebyshev">Chebyshev (L∞ Maximum)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">
+            <span>Animation Speed</span>
+            <span id="valSpeed" class="form-label-val">1.0x</span>
+          </div>
+          <input type="range" id="sliderSpeed" class="range-slider" min="0.2" max="5.0" step="0.2" value="1.0">
+        </div>
+      </section>
+
+      <!-- Dataset Generator Card -->
+      <section class="panel-card">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            Dataset Presets
+          </span>
+        </div>
+
+        <div class="preset-grid">
+          <button class="preset-btn" data-preset="tourism" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.2)); border-color: rgba(6, 182, 212, 0.5); color: #38bdf8;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            🇲🇾 Sustainable Tourism (DOSM 2023)
+          </button>
+          <button class="preset-btn active" data-preset="blobs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="12" cy="17" r="3"/></svg>
+            Gaussian Blobs
+          </button>
+          <button class="preset-btn" data-preset="concentric">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+            Concentric Rings
+          </button>
+          <button class="preset-btn" data-preset="anisotropic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="8" rx="8" ry="3" transform="rotate(-20 12 8)"/><ellipse cx="12" cy="16" rx="8" ry="3" transform="rotate(20 12 16)"/></svg>
+            Anisotropic
+          </button>
+          <button class="preset-btn" data-preset="moons">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+            Two Moons
+          </button>
+          <button class="preset-btn" data-preset="variedDensity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="12" r="5"/><circle cx="17" cy="12" r="2"/></svg>
+            Varied Density
+          </button>
+          <button class="preset-btn" data-preset="smiley">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            Smiley Face
+          </button>
+        </div>
+
+        <!-- Tourism Dimension Selector (Visible when Tourism Dataset is Active) -->
+        <div id="tourismDimensionsCard" style="display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding: 10px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 4px;">
+            <span>🧭 2D Feature Projection Axes</span>
+          </div>
+          <div class="form-group">
+            <label for="selectTourismX" class="form-label" style="font-size: 0.72rem;">X-Axis Feature</label>
+            <select id="selectTourismX" class="custom-select" style="font-size: 0.78rem; padding: 5px 8px;">
+              <option value="density" selected>Density (visitors / resident)</option>
+              <option value="spend">Spend per Visitor (RM)</option>
+              <option value="visitors">Domestic Visitors ('000)</option>
+              <option value="receipts">Total Receipts (RM million)</option>
+              <option value="stay">Avg Length of Stay (days)</option>
+              <option value="population">Population ('000)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="selectTourismY" class="form-label" style="font-size: 0.72rem;">Y-Axis Feature</label>
+            <select id="selectTourismY" class="custom-select" style="font-size: 0.78rem; padding: 5px 8px;">
+              <option value="spend" selected>Spend per Visitor (RM)</option>
+              <option value="density">Density (visitors / resident)</option>
+              <option value="visitors">Domestic Visitors ('000)</option>
+              <option value="receipts">Total Receipts (RM million)</option>
+              <option value="stay">Avg Length of Stay (days)</option>
+              <option value="population">Population ('000)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="pointCountContainer" class="form-group" style="margin-top: 6px;">
+          <div class="form-label">
+            <span>Data Point Count</span>
+            <span id="valPoints" class="form-label-val">300</span>
+          </div>
+          <input type="range" id="sliderPoints" class="range-slider" min="50" max="800" step="25" value="300">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button id="btnNewData" class="btn btn-primary" style="flex: 1;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Re-generate
+          </button>
+          <button id="btnClearCanvas" class="btn btn-secondary btn-icon" data-tooltip="Clear All Points">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Display Overlay Toggles -->
+      <section class="panel-card">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            Visual Layers
+          </span>
+        </div>
+
+        <label class="toggle-item">
+          <span>Voronoi Partition Zones</span>
+          <div class="switch">
+            <input type="checkbox" id="toggleVoronoi" checked>
+            <span class="slider"></span>
+          </div>
+        </label>
+
+        <label class="toggle-item">
+          <span>Centroid Trajectory Trails</span>
+          <div class="switch">
+            <input type="checkbox" id="toggleTrails" checked>
+            <span class="slider"></span>
+          </div>
+        </label>
+
+        <label class="toggle-item">
+          <span>Point Assignment Connectors</span>
+          <div class="switch">
+            <input type="checkbox" id="toggleLines">
+            <span class="slider"></span>
+          </div>
+        </label>
+      </section>
+
+      <!-- CSV Export / Import -->
+      <section class="panel-card">
+        <div style="display: flex; gap: 8px;">
+          <button id="btnExportCSV" class="btn btn-secondary" style="flex: 1; font-size: 0.78rem;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+          <label class="btn btn-secondary" style="flex: 1; font-size: 0.78rem; cursor: pointer; text-align: center;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import CSV
+            <input type="file" id="fileImportCSV" accept=".csv" style="display: none;">
+          </label>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- Center Simulation Stage -->
+    <section class="stage-container">
+
+      <!-- Top Floating Stats HUD -->
+      <div class="stage-top-hud">
+        <div class="hud-item">
+          <span>Iteration:</span>
+          <strong id="hudIteration">0</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item">
+          <span>Phase:</span>
+          <strong id="hudPhase">IDLE</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item">
+          <span>Points:</span>
+          <strong id="hudPoints">0</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item">
+          <span>Inertia (WCSS):</span>
+          <strong id="hudInertia">0</strong>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item">
+          <span>Silhouette:</span>
+          <strong id="hudSilhouette">--</strong>
+        </div>
+      </div>
+
+      <!-- Canvas Tools Bar -->
+      <div class="canvas-tool-bar">
+        <button class="tool-btn active" data-tool="brush" data-tooltip="Brush / Spray Points">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="manualCentroid" data-tooltip="Place Initial Centroids">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="eraser" data-tooltip="Eraser Tool">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16C2 15 2 13 3 12L13 2L22 11L18 15"/><path d="M17 17l4-4"/></svg>
+        </button>
+      </div>
+
+      <!-- Interactive 2D Canvas -->
+      <div class="canvas-wrapper">
+        <canvas id="simulationCanvas"></canvas>
+      </div>
+
+      <!-- Bottom Floating Playback Controller -->
+      <div class="stage-bottom-controls">
+        <button id="btnResetCentroids" class="btn btn-secondary btn-icon btn-round" data-tooltip="Re-seed Centroids (R)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+        </button>
+
+        <button id="btnStepBack" class="btn btn-secondary btn-icon btn-round" data-tooltip="Step Backward (Left Arrow)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+        </button>
+
+        <button id="btnPlay" class="btn btn-play" data-tooltip="Play / Pause (Space)">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+
+        <button id="btnStepForward" class="btn btn-secondary btn-icon btn-round" data-tooltip="Step Forward (Right Arrow)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+        </button>
+
+        <button id="btnRunConverge" class="btn btn-success btn-round" style="padding: 8px 16px; font-size: 0.8rem;" data-tooltip="Run to Convergence">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
+          Converge
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Right Analytics & Diagnostics Sidebar -->
+    <aside class="sidebar sidebar-right">
+
+      <!-- Analytics Tabs -->
+      <section class="panel-card" style="padding-bottom: 8px;">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Quantitative Analytics
+          </span>
+        </div>
+
+        <div class="analytics-tab-bar">
+          <button class="tab-btn active" data-tab="inertia">WCSS Inertia</button>
+          <button class="tab-btn" data-tab="silhouette">Silhouette</button>
+          <button class="tab-btn" data-tab="elbow">Elbow Sweep</button>
+        </div>
+
+        <!-- Inertia Card -->
+        <div id="inertiaCard" class="chart-box">
+          <div class="chart-header">
+            <span class="chart-title">Inertia (WCSS) vs Iteration</span>
+            <span class="chart-badge">Lower is better</span>
+          </div>
+          <canvas id="inertiaChartCanvas" class="chart-canvas"></canvas>
+        </div>
+
+        <!-- Silhouette Card -->
+        <div id="silhouetteCard" class="chart-box" style="display: none;">
+          <div class="chart-header">
+            <span class="chart-title">Silhouette Coefficient Plot</span>
+            <span class="chart-badge">Range [-1, +1]</span>
+          </div>
+          <canvas id="silhouetteChartCanvas" class="chart-canvas"></canvas>
+        </div>
+
+        <!-- Elbow Card -->
+        <div id="elbowCard" class="chart-box" style="display: none;">
+          <div class="chart-header">
+            <span class="chart-title">Elbow Method: Inertia vs K</span>
+            <button id="btnRunElbow" class="btn btn-primary" style="padding: 2px 8px; font-size: 0.7rem;">Run Sweep</button>
+          </div>
+          <canvas id="elbowChartCanvas" class="chart-canvas"></canvas>
+        </div>
+      </section>
+
+      <!-- Cluster Breakdown Table -->
+      <section class="panel-card" style="flex: 1;">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+            Cluster Diagnostics
+          </span>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table class="cluster-table">
+            <thead>
+              <tr>
+                <th>Cluster</th>
+                <th>Centroid (x,y)</th>
+                <th>Points (%)</th>
+                <th>Spread (σ)</th>
+              </tr>
+            </thead>
+            <tbody id="clusterTableBody">
+              <!-- Dynamically rendered -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </aside>
+
+  </main>
+
+  <!-- Educational Guide / Math Modal -->
+  <div id="modalHelpHolder" class="modal-backdrop">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2 class="modal-title">Understanding K-Means Clustering</h2>
+        <button id="btnCloseModal" class="btn btn-ghost btn-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p>
+          <strong>K-Means</strong> is an unsupervised partition-based clustering algorithm that groups <em>N</em> data points into <em>K</em> distinct, non-overlapping clusters.
+        </p>
+
+        <h3 style="color: var(--text-primary); font-size: 0.95rem;">1. Objective Function (WCSS)</h3>
+        <p>The algorithm minimizes the Within-Cluster Sum of Squares (WCSS), also known as inertia:</p>
+        <div class="formula-box">
+          J = ∑ (i=1 to K) ∑ (x ∈ C_i) || x - μ_i ||²
+        </div>
+
+        <h3 style="color: var(--text-primary); font-size: 0.95rem;">2. Algorithm Steps</h3>
+        <ol style="padding-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <li><strong>Initialization:</strong> Pick <em>K</em> initial cluster centroids $\mu_1, \dots, \mu_k$ (e.g. via K-Means++).</li>
+          <li><strong>Assignment Step:</strong> Assign each data point $x_j$ to the cluster with the nearest centroid:
+            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: #a5b4fc; margin-top: 4px;">c(j) = argmin_i || x_j - μ_i ||</div>
+          </li>
+          <li><strong>Update Step:</strong> Recalculate each centroid as the center of mass (mean) of all points assigned to it:
+            <div style="font-family: var(--font-mono); font-size: 0.8rem; color: #a5b4fc; margin-top: 4px;">μ_i = (1 / |C_i|) ∑ (x ∈ C_i) x</div>
+          </li>
+          <li><strong>Convergence:</strong> Repeat steps 2 and 3 until centroid movements fall below tolerance $\epsilon$ or maximum iterations are reached.</li>
+        </ol>
+
+        <h3 style="color: var(--text-primary); font-size: 0.95rem;">3. Why K-Means++?</h3>
+        <p>Standard random initialization can get trapped in poor local optima. <strong>K-Means++</strong> selects subsequent centroids with probability proportional to the squared distance $D(x)^2$ from the nearest existing centroid, providing provable $O(\log k)$ competitive bounds.</p>
+
+        <h3 style="color: var(--text-primary); font-size: 0.95rem;">4. Limitations to Explore</h3>
+        <p>Use the presets on the left to observe how K-Means behaves when assumptions are violated:</p>
+        <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+          <li><strong>Concentric Rings / Moons:</strong> K-Means assumes convex, spherical clusters and fails on complex geometric manifolds.</li>
+          <li><strong>Anisotropic Blobs:</strong> Standard Euclidean distance assumes isotropic (equal variance in all directions) clusters.</li>
+          <li><strong>Varied Densities:</strong> Dense clusters may swallow neighboring sparse clusters.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Chat Assistant Toggle Button -->
+  <button id="chatToggleBtn" class="chat-toggle-btn" data-tooltip="Ask AI Cluster Assistant">
+    <span class="chat-badge-indicator"></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+  </button>
+
+  <!-- Floating Chatbot Assistant Popup -->
+  <div id="chatPanel" class="chat-panel">
+    <!-- Chat Header -->
+    <div class="chat-header">
+      <div class="chat-header-info">
+        <div class="chat-avatar-main">AI</div>
+        <div>
+          <div class="chat-title-text">K-Means AI Assistant</div>
+          <div class="chat-subtitle-text">Live Context Connected</div>
+        </div>
+      </div>
+      <button id="chatCloseBtn" class="chat-close-btn" data-tooltip="Close Chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 18px; height: 18px;">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Quick Suggested Questions -->
+    <div id="chatQuickPills" class="chat-quick-pills">
+      <button class="quick-pill" data-question="What does the Sustainable Tourism dataset show?">🇲🇾 Tourism Analysis</button>
+      <button class="quick-pill" data-question="What is the current simulation state?">📊 Current State</button>
+      <button class="quick-pill" data-question="What is K-Means++ and why use it?">✨ K-Means++ Intuition</button>
+      <button class="quick-pill" data-question="How does the Elbow method choose K?">📈 Elbow Method</button>
+      <button class="quick-pill" data-question="Why does K-Means fail on concentric rings?">⭕ Concentric Rings Issue</button>
+      <button class="quick-pill" data-question="What is the Silhouette score?">🎯 Silhouette Score</button>
+      <button class="quick-pill" data-question="Explain Euclidean vs Manhattan distance">📏 Distance Metrics</button>
+    </div>
+
+    <!-- Messages List -->
+    <div id="chatMessagesContainer" class="chat-messages">
+      <!-- Injected dynamically by ChatAssistant -->
+    </div>
+
+    <!-- Input Form -->
+    <div class="chat-input-container">
+      <form id="chatForm" class="chat-form">
+        <input
+          type="text"
+          id="chatInput"
+          class="chat-input"
+          placeholder="Ask a question about K-Means..."
+          autocomplete="off"
+        />
+        <button type="submit" class="chat-send-btn" data-tooltip="Send (Enter)">
+          <svg viewBox="0 0 24 24">
+            <line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
