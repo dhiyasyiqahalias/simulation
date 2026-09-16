@@ -17,7 +17,8 @@ import numpy as np
 def load_and_clean_socio_data(
     pop_file="Population_by_State_2019_2025.xlsx",
     lf_file="Labour_Force_2019_2023.xlsx",
-    hies_file="HIES_State_2022&2024.xlsx"
+    hies_file="HIES_State_2022&2024.xlsx",
+    dt_file="Domestic_Tourism_2019_2023.xlsx"
 ):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -32,6 +33,7 @@ def load_and_clean_socio_data(
     pop_path = resolve_path(pop_file)
     lf_path = resolve_path(lf_file)
     hies_path = resolve_path(hies_file)
+    dt_path = resolve_path(dt_file)
 
     # 1. Process Population Data
     df_pop_raw = pd.read_excel(pop_path, skiprows=2)
@@ -134,21 +136,57 @@ def load_and_clean_socio_data(
     df_lf["State"] = df_lf["State"].apply(normalize_state)
     df_hies["State"] = df_hies["State"].apply(normalize_state)
 
-    # 4. Merge all three dataframes
+    # 4. Process Domestic Tourism Data
+    dt_xls = pd.ExcelFile(dt_path)
+    dt_frames = []
+    for sheet in dt_xls.sheet_names:
+        df_sheet = pd.read_excel(dt_xls, sheet_name=sheet, skiprows=2)
+        df_sheet = df_sheet.dropna(subset=["State"])
+        df_sheet["Year"] = int(sheet)
+        
+        # Standardize column names
+        rename_map = {
+            f"Domestic_Visitors_{sheet}": "Domestic_Visitors",
+            f"Total_Receipts_{sheet}\n(RM)": "Total_Receipts_RM",
+            "Density (Visitors\nper resident)": "Density",
+            "Spend_Per_Visitor(RM)": "Spend_Per_Visitor_RM"
+        }
+        
+        for col in rename_map.keys():
+            if col not in df_sheet.columns:
+                # Fallback fuzzy match
+                for c in df_sheet.columns:
+                    if col.replace("\n", "").lower() in str(c).replace("\n", "").lower() or rename_map[col].replace("_", "").lower() in str(c).replace("_", "").lower():
+                        df_sheet.rename(columns={c: rename_map[col]}, inplace=True)
+                        break
+            else:
+                df_sheet.rename(columns={col: rename_map[col]}, inplace=True)
+                
+        keep_cols = ["State", "Year"] + list(rename_map.values())
+        existing_cols = [c for c in keep_cols if c in df_sheet.columns]
+        dt_frames.append(df_sheet[existing_cols])
+        
+    df_dt = pd.concat(dt_frames, ignore_index=True)
+    df_dt["State"] = df_dt["State"].apply(normalize_state)
+
+    # 5. Merge all dataframes
     # Merge Population and Labour Force
     df_merged = pd.merge(df_pop, df_lf, on=["State", "Year"], how="outer")
     # Merge with HIES
     df_merged = pd.merge(df_merged, df_hies, on=["State", "Year"], how="outer")
+    # Merge with Domestic Tourism
+    df_merged = pd.merge(df_merged, df_dt, on=["State", "Year"], how="outer")
     
     # Sort logically
     df_merged = df_merged.sort_values(["State", "Year"]).reset_index(drop=True)
 
-    # 5. Interpolate missing HIES values (and others) linearly by State
+    # 6. Interpolate missing HIES values (and others) linearly by State
     # This addresses the gaps in 2019-2021 and 2023 for HIES data
     metrics = [
         "Population", "Labour_Force_Size", "Employed", "Unemployed",
         "Unemployment_Rate", "Employment_Population_Ratio",
-        "Mean_Income", "Gini", "Poverty_Rate"
+        "Mean_Income", "Gini", "Poverty_Rate",
+        "Domestic_Visitors", "Total_Receipts_RM", "Density", "Spend_Per_Visitor_RM"
     ]
     
     # Ensure numeric types

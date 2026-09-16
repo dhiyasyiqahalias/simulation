@@ -697,7 +697,8 @@ with tab_socio:
     socio_metrics = [
         "Population", "Labour_Force_Size", "Employed", "Unemployed",
         "Unemployment_Rate", "Employment_Population_Ratio",
-        "Mean_Income", "Gini", "Poverty_Rate"
+        "Mean_Income", "Gini", "Poverty_Rate",
+        "Density", "Spend_Per_Visitor_RM", "Total_Receipts_RM"
     ]
     
     with socio_col1:
