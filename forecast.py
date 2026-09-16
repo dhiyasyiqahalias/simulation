@@ -71,26 +71,29 @@ def load_historical_tourism_data(file_path: str = "historical_tourism.csv") -> p
     return df
 
 
-def get_state_time_series(df: pd.DataFrame, state_name: str) -> pd.Series:
+def get_state_time_series(df: pd.DataFrame, state_name: str, metric: str = "Domestic_Visitors") -> pd.Series:
     """
-    Extract a single state's yearly domestic visitor series indexed by Year.
+    Extract a single state's yearly metric series indexed by Year.
     
     Parameters:
-        df (pd.DataFrame): Historical tourism DataFrame.
+        df (pd.DataFrame): Historical DataFrame.
         state_name (str): Target Malaysian state name.
+        metric (str): Column name to extract.
         
     Returns:
-        pd.Series: Indexed time series of Domestic_Visitors.
+        pd.Series: Indexed time series of the metric.
     """
     state_df = df[df["State"] == state_name].copy()
     if state_df.empty:
         raise ValueError(f"State '{state_name}' not found in dataset.")
 
     state_df = state_df.sort_values("Year")
+    state_df = state_df.dropna(subset=[metric])
+    
     series = pd.Series(
-        data=state_df["Domestic_Visitors"].values,
+        data=state_df[metric].values,
         index=state_df["Year"].values,
-        name="Domestic_Visitors"
+        name=metric
     )
     return series
 
@@ -245,6 +248,68 @@ def forecast_future_visitors(model_fit, series: pd.Series, forecast_years: int =
 
     # 4. Overall projected multi-year growth
     final_pred = forecast_rows[-1]["Forecasted_Visitors"]
+    overall_growth = ((final_pred - last_known_val) / last_known_val) * 100 if last_known_val > 0 else 0
+
+    return forecast_df, combined_df, overall_growth
+
+def forecast_future_metric(model_fit, series: pd.Series, forecast_years: int = 3, alpha: float = 0.05, metric_name: str = "Value"):
+    """
+    Generic version of forecast_future_visitors that adapts to any metric name.
+    """
+    last_year = int(series.index[-1])
+    future_years = [last_year + i for i in range(1, forecast_years + 1)]
+
+    forecast_res = model_fit.get_forecast(steps=forecast_years)
+    mean_forecast = forecast_res.predicted_mean
+    conf_int_95 = forecast_res.conf_int(alpha=0.05)
+    
+    forecast_rows = []
+    last_known_val = series.values[-1]
+
+    for i, year in enumerate(future_years):
+        # We don't enforce max(0, val) generically because some metrics (like growth) could be negative,
+        # but for these socio-economic ones, they should be positive. Let's keep max(0).
+        pred_val = max(0, mean_forecast[i])
+        low_95 = max(0, conf_int_95[i, 0] if hasattr(conf_int_95, "iloc") else conf_int_95[i][0])
+        high_95 = max(pred_val, conf_int_95[i, 1] if hasattr(conf_int_95, "iloc") else conf_int_95[i][1])
+
+        prev_val = mean_forecast[i - 1] if i > 0 else last_known_val
+        yoy_growth = ((pred_val - prev_val) / prev_val) * 100 if prev_val > 0 else 0
+
+        forecast_rows.append({
+            "Year": year,
+            f"Forecasted_{metric_name}": round(pred_val, 2),
+            "Lower_CI_95": round(low_95, 2),
+            "Upper_CI_95": round(high_95, 2),
+            "YoY_Growth_Pct": round(yoy_growth, 2)
+        })
+
+    forecast_df = pd.DataFrame(forecast_rows)
+
+    hist_rows = [
+        {
+            "Year": int(year),
+            "Value": val,
+            "Type": "Historical (Actual)",
+            "Lower_CI": np.nan,
+            "Upper_CI": np.nan
+        }
+        for year, val in series.items()
+    ]
+
+    pred_plot_rows = [
+        {
+            "Year": int(row["Year"]),
+            "Value": row[f"Forecasted_{metric_name}"],
+            "Type": "Forecast (ARIMA)",
+            "Lower_CI": row["Lower_CI_95"],
+            "Upper_CI": row["Upper_CI_95"]
+        }
+        for row in forecast_rows
+    ]
+
+    combined_df = pd.DataFrame(hist_rows + pred_plot_rows)
+    final_pred = forecast_rows[-1][f"Forecasted_{metric_name}"]
     overall_growth = ((final_pred - last_known_val) / last_known_val) * 100 if last_known_val > 0 else 0
 
     return forecast_df, combined_df, overall_growth

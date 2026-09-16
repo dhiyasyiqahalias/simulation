@@ -20,8 +20,10 @@ from forecast import (
     load_historical_tourism_data,
     get_state_time_series,
     find_best_arima_model,
-    forecast_future_visitors
+    forecast_future_visitors,
+    forecast_future_metric
 )
+from socio_data import load_and_clean_socio_data
 
 # ==============================================================================
 # 1. Page Configuration & Custom CSS
@@ -164,9 +166,14 @@ def get_kmeans_pipeline(scaler_type: str, seed: int):
 def get_historical_dataset():
     return load_historical_tourism_data("historical_tourism.csv")
 
+@st.cache_data
+def get_socio_dataset():
+    return load_and_clean_socio_data()
+
 try:
     df_results, scaler, model, label_map, cluster_summary, feature_cols = get_kmeans_pipeline(scaler_choice, random_seed)
     df_history = get_historical_dataset()
+    df_socio = get_socio_dataset()
 except Exception as e:
     st.error(f"Error loading datasets or training models: {e}")
     st.stop()
@@ -220,9 +227,10 @@ with col_kpi4:
 st.write("")
 
 # Dual Main Tabs
-tab_kmeans, tab_arima = st.tabs([
+tab_kmeans, tab_arima, tab_socio = st.tabs([
     "🎯 1. Overtourism Risk Classifier (K-Means)",
-    "📈 2. Time Series Forecasting (ARIMA)"
+    "📈 2. Tourism Forecasting (ARIMA)",
+    "📊 3. Socio-Economic Forecasting (ARIMA)"
 ])
 
 
@@ -670,3 +678,166 @@ with tab_arima:
             }),
             use_container_width=True
         )
+
+# ==============================================================================
+# TAB 3: Socio-Economic Forecasting (ARIMA)
+# ==============================================================================
+with tab_socio:
+    st.markdown("### 📊 Socio-Economic Metric Forecasting")
+    
+    st.markdown("""
+    <div class="forecast-explanation-box">
+        💡 <strong>Analytical Context:</strong> Forecast future trends for key state socio-economic metrics (Population, Labour Force, Poverty Rate, etc.) to aid in comprehensive sustainable tourism planning.
+    </div>
+    """, unsafe_allow_html=True)
+
+    socio_col1, socio_col2, socio_col3 = st.columns([1.2, 1.0, 1.0])
+    
+    socio_state_list = sorted(df_socio["State"].unique().tolist())
+    socio_metrics = [
+        "Population", "Labour_Force_Size", "Employed", "Unemployed",
+        "Unemployment_Rate", "Employment_Population_Ratio",
+        "Mean_Income", "Gini", "Poverty_Rate"
+    ]
+    
+    with socio_col1:
+        sel_socio_state = st.selectbox(
+            "Select State",
+            options=socio_state_list,
+            index=socio_state_list.index("Melaka") if "Melaka" in socio_state_list else 0,
+            key="socio_state_sel"
+        )
+        
+    with socio_col2:
+        sel_socio_metric = st.selectbox(
+            "Select Metric to Forecast",
+            options=socio_metrics,
+            index=0,
+            key="socio_metric_sel"
+        )
+        
+    with socio_col3:
+        socio_horizon = st.slider(
+            "Forecast Horizon (Years)",
+            min_value=1,
+            max_value=5,
+            value=3,
+            step=1,
+            key="socio_horizon"
+        )
+
+    # Extract series
+    socio_series = get_state_time_series(df_socio, sel_socio_state, metric=sel_socio_metric)
+    
+    if len(socio_series) < 3:
+        st.error("Not enough historical data points to fit an ARIMA model for this metric.")
+    else:
+        with st.spinner(f"Optimizing ARIMA model for {sel_socio_metric} in {sel_socio_state}..."):
+            best_socio_fit, best_socio_order, best_socio_aic, _ = find_best_arima_model(socio_series)
+            s_forecast_df, s_combined_df, s_overall_growth = forecast_future_metric(
+                best_socio_fit, socio_series, forecast_years=socio_horizon, metric_name=sel_socio_metric
+            )
+
+        st.write("")
+        sm_col1, sm_col2, sm_col3, sm_col4 = st.columns(4)
+
+        last_s_actual = socio_series.values[-1]
+        target_s_pred = s_forecast_df.iloc[-1][f"Forecasted_{sel_socio_metric}"]
+        target_s_year = int(s_forecast_df.iloc[-1]["Year"])
+        last_s_year = int(socio_series.index[-1])
+
+        with sm_col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-title">Optimal Model Order</div>
+                <div class="metric-value" style="font-size: 1.3rem; color: #818cf8;">ARIMA{best_socio_order}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with sm_col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-title">{last_s_year} Actual ({sel_socio_metric})</div>
+                <div class="metric-value" style="font-size: 1.3rem;">{last_s_actual:,.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with sm_col3:
+            s_color = "#34d399" if s_overall_growth > 0 else "#f87171"
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-title">Projected {target_s_year}</div>
+                <div class="metric-value" style="font-size: 1.3rem; color: {s_color};">{target_s_pred:,.2f}</div>
+                <div style="font-size: 0.72rem; color: {s_color};">{s_overall_growth:+.1f}% vs {last_s_year}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with sm_col4:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-title">Trend</div>
+                <div class="metric-value" style="font-size: 1.1rem; margin-top: 8px;">{"📈 Upward" if s_overall_growth > 0 else "📉 Downward" if s_overall_growth < 0 else "➖ Stable"}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.write("")
+
+        # Interactive Forecast Plotly Chart
+        fig_s_forecast = go.Figure()
+
+        # Historical Actual Line
+        s_hist_df = s_combined_df[s_combined_df["Type"] == "Historical (Actual)"]
+        fig_s_forecast.add_trace(go.Scatter(
+            x=s_hist_df["Year"],
+            y=s_hist_df["Value"],
+            mode="lines+markers",
+            name="Historical Actual",
+            line=dict(color="#10b981", width=3.5),
+            marker=dict(size=8, color="#10b981")
+        ))
+
+        # Forecast Line
+        last_sh_x = [s_hist_df["Year"].iloc[-1]]
+        last_sh_y = [s_hist_df["Value"].iloc[-1]]
+        
+        s_pred_x = last_sh_x + s_forecast_df["Year"].tolist()
+        s_pred_y = last_sh_y + s_forecast_df[f"Forecasted_{sel_socio_metric}"].tolist()
+
+        fig_s_forecast.add_trace(go.Scatter(
+            x=s_pred_x,
+            y=s_pred_y,
+            mode="lines+markers",
+            name=f"ARIMA{best_socio_order} Forecast",
+            line=dict(color="#f59e0b", width=3.5, dash="dash"),
+            marker=dict(size=9, color="#f59e0b", symbol="diamond")
+        ))
+
+        # 95% CI
+        s_ci_x = s_forecast_df["Year"].tolist() + s_forecast_df["Year"].tolist()[::-1]
+        s_ci_y = s_forecast_df["Upper_CI_95"].tolist() + s_forecast_df["Lower_CI_95"].tolist()[::-1]
+
+        fig_s_forecast.add_trace(go.Scatter(
+            x=s_ci_x,
+            y=s_ci_y,
+            fill="toself",
+            fillcolor="rgba(245, 158, 11, 0.15)",
+            line=dict(color="rgba(255,255,255,0)"),
+            hoverinfo="skip",
+            showlegend=True,
+            name="95% Confidence Interval"
+        ))
+
+        fig_s_forecast.update_layout(
+            title=f"<b>{sel_socio_metric} Trajectory & Forecast: {sel_socio_state}</b>",
+            template="plotly_dark",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(title="Year", tickmode="linear", dtick=1),
+            yaxis=dict(title=sel_socio_metric, tickformat=","),
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=450
+        )
+
+        st.plotly_chart(fig_s_forecast, use_container_width=True)
+
