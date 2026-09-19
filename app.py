@@ -267,6 +267,7 @@ with tab_kmeans:
         "KMeans_Predicted_Tier", 
         "Agreement"
     ]].copy()
+    display_df.index = range(1, len(display_df) + 1)
 
     def highlight_disagreements(row):
         if not row["Agreement"]:
