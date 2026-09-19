@@ -121,7 +121,7 @@ st.markdown("""
 # ==============================================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/000000/malaysia.png", width=64)
-    st.title("🇲🇾 Overtourism Lab")
+    st.title("Tourism Analysis")
     st.caption("**DOSM Datathon 2026 Track: Sustainable Tourism**")
     
     st.markdown("---")
@@ -184,7 +184,7 @@ except Exception as e:
 # ==============================================================================
 # 4. Main App Header & Navigation Tabs
 # ==============================================================================
-st.title("🇲🇾 Malaysia Overtourism Risk Classifier")
+st.title("Tourism Risk Analysis Classifier")
 st.markdown("**A Machine Learning & Time Series Forecasting Framework for Sustainable Tourism Planning**")
 
 # Global State Selection
