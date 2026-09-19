@@ -25,6 +25,8 @@ from forecast import (
 )
 from socio_data import load_and_clean_socio_data
 
+MAX_DISPLAY_YEAR = 2028
+
 # ==============================================================================
 # 1. Page Configuration & Custom CSS
 # ==============================================================================
@@ -185,6 +187,16 @@ except Exception as e:
 st.title("🇲🇾 Malaysia Overtourism Risk Classifier")
 st.markdown("**A Machine Learning & Time Series Forecasting Framework for Sustainable Tourism Planning**")
 
+# Global State Selection
+st.markdown("---")
+state_list = sorted(df_history["State"].unique().tolist())
+global_state = st.selectbox(
+    "🌐 **Global State Selector (Applies to all Forecasts & Pre-fills)**", 
+    options=state_list, 
+    index=state_list.index("Melaka") if "Melaka" in state_list else 0
+)
+st.markdown("---")
+
 # Top KPI Summary row across the 16 states
 col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
 total_states = len(df_results)
@@ -226,11 +238,12 @@ with col_kpi4:
 
 st.write("")
 
-# Dual Main Tabs
-tab_kmeans, tab_arima, tab_socio = st.tabs([
+# Main Tabs
+tab_kmeans, tab_arima, tab_socio, tab_chat = st.tabs([
     "🎯 1. Overtourism Risk Classifier (K-Means)",
     "📈 2. Tourism Forecasting (ARIMA)",
-    "📊 3. Socio-Economic Forecasting (ARIMA)"
+    "📊 3. Socio-Economic Forecasting (ARIMA)",
+    "🤖 4. Glossary Assistant"
 ])
 
 
@@ -294,21 +307,14 @@ with tab_kmeans:
     with pred_col1:
         st.markdown("#### Input Parameters")
         
-        st.write("💡 *Prefill with actual state profiles:*")
-        preset_cols = st.columns(4)
-        preset_vals = None
-        if preset_cols[0].button("🏙️ Melaka"):
-            preset_vals = (15558661, 1028300, 6438411057)
-        if preset_cols[1].button("🌳 Selangor"):
-            preset_vals = (27579478, 7209700, 11102713152)
-        if preset_cols[2].button("🏝️ Labuan"):
-            preset_vals = (331360, 99000, 194064160)
-        if preset_cols[3].button("🏛️ KL"):
-            preset_vals = (22232643, 2005700, 10995324143)
-
-        default_visitors = preset_vals[0] if preset_vals else 10000000
-        default_pop = preset_vals[1] if preset_vals else 1500000
-        default_receipts = preset_vals[2] if preset_vals else 4000000000
+        st.write(f"💡 *Pre-filled with **{global_state}** profile:*")
+        
+        # Pull data for the globally selected state
+        state_data = df_results[df_results["State"] == global_state].iloc[0]
+        default_visitors = int(state_data["Domestic_Visitors"])
+        default_pop = int(state_data["Population"])
+        # Back-calculate total receipts from spend per visitor
+        default_receipts = int(state_data["Spend_Per_Visitor_RM"] * default_visitors)
 
         input_visitors = st.number_input(
             "Domestic Visitors (Number of tourists)",
@@ -348,13 +354,13 @@ with tab_kmeans:
         
         if pred_tier == "Overcrowded":
             badge_html = '<div class="badge-overcrowded">🔴 OVERCROWDED TIER</div>'
-            tier_msg = "High risk of carrying capacity stress, traffic congestion, and infrastructure strain relative to local residents."
+            tier_msg = "Requires capacity management and dispersal messaging. High risk of infrastructure strain."
         elif pred_tier == "Balanced":
             badge_html = '<div class="badge-balanced">🟡 BALANCED TIER</div>'
             tier_msg = "Healthy visitor-to-resident ratio with steady economic contribution."
         else:
             badge_html = '<div class="badge-undervisited">🟢 UNDER-VISITED TIER</div>'
-            tier_msg = "Significant growth capacity; low visitor density relative to resident population."
+            tier_msg = "Presents an investment and tourism development opportunity; has absorptive capacity and could benefit from targeted government action."
 
         st.markdown(f"""
         <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 20px; text-align: center;">
@@ -496,19 +502,9 @@ with tab_arima:
     """, unsafe_allow_html=True)
 
     # State Selection and Horizon Controls
-    f_col1, f_col2, f_col3 = st.columns([1.2, 0.8, 1.0])
-    
-    state_list = sorted(df_history["State"].unique().tolist())
+    f_col1, f_col2 = st.columns([1.0, 1.0])
     
     with f_col1:
-        selected_state = st.selectbox(
-            "Select Malaysian State / Territory",
-            options=state_list,
-            index=state_list.index("Melaka") if "Melaka" in state_list else 0,
-            help="Choose a state to fit its historical time series (2018-2023)."
-        )
-        
-    with f_col2:
         forecast_horizon = st.slider(
             "Forecast Horizon (Years ahead)",
             min_value=2,
@@ -518,14 +514,14 @@ with tab_arima:
             help="Number of future years to forecast (e.g. 2024 to 2026+)."
         )
 
-    with f_col3:
+    with f_col2:
         st.markdown("**Active Time Series Data:**")
         st.caption(f"Historical span: **2018 – 2023** (DOSM Domestic Tourism Survey)")
 
     # Extract state series and fit ARIMA
-    state_series = get_state_time_series(df_history, selected_state)
+    state_series = get_state_time_series(df_history, global_state)
     
-    with st.spinner(f"Optimizing ARIMA model for {selected_state}..."):
+    with st.spinner(f"Optimizing ARIMA model for {global_state}..."):
         best_fit, best_order, best_aic, grid_results_df = find_best_arima_model(state_series)
         forecast_df, combined_df, overall_growth = forecast_future_visitors(best_fit, state_series, forecast_years=forecast_horizon)
 
@@ -623,7 +619,7 @@ with tab_arima:
     ))
 
     fig_forecast.update_layout(
-        title=f"<b>Domestic Visitor Trajectory & Forecast: {selected_state}</b>",
+        title=f"<b>Domestic Visitor Trajectory & Forecast: {global_state}</b>",
         template="plotly_dark",
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -640,7 +636,7 @@ with tab_arima:
     tab_f_table, tab_f_grid = st.columns([1.1, 0.9])
 
     with tab_f_table:
-        st.markdown(f"#### 📑 Projected Figures for {selected_state}")
+        st.markdown(f"#### 📑 Projected Figures for {global_state}")
         
         display_forecast_df = forecast_df[[
             "Year", 
@@ -691,9 +687,8 @@ with tab_socio:
     </div>
     """, unsafe_allow_html=True)
 
-    socio_col1, socio_col2, socio_col3 = st.columns([1.2, 1.0, 1.0])
+    socio_col1, socio_col2 = st.columns([1.0, 1.0])
     
-    socio_state_list = sorted(df_socio["State"].unique().tolist())
     socio_metrics = [
         "Population", "Labour_Force_Size", "Employed", "Unemployed",
         "Unemployment_Rate", "Employment_Population_Ratio",
@@ -702,14 +697,6 @@ with tab_socio:
     ]
     
     with socio_col1:
-        sel_socio_state = st.selectbox(
-            "Select State",
-            options=socio_state_list,
-            index=socio_state_list.index("Melaka") if "Melaka" in socio_state_list else 0,
-            key="socio_state_sel"
-        )
-        
-    with socio_col2:
         sel_socio_metric = st.selectbox(
             "Select Metric to Forecast",
             options=socio_metrics,
@@ -717,35 +704,74 @@ with tab_socio:
             key="socio_metric_sel"
         )
         
-    with socio_col3:
+    # Determine the true last historical year for this specific metric to set the slider max
+    true_last_years = {
+        "Population": 2025,
+        "Labour_Force_Size": 2023,
+        "Employed": 2023,
+        "Unemployed": 2023,
+        "Unemployment_Rate": 2023,
+        "Employment_Population_Ratio": 2023,
+        "Mean_Income": 2024,
+        "Gini": 2024,
+        "Poverty_Rate": 2024,
+        "Density": 2023,
+        "Spend_Per_Visitor_RM": 2023,
+        "Total_Receipts_RM": 2023
+    }
+    
+    # 2025 is the fallback if not in dict
+    display_last_year = true_last_years.get(sel_socio_metric, 2025)
+    max_slider_val = max(1, MAX_DISPLAY_YEAR - display_last_year)
+
+    with socio_col2:
         socio_horizon = st.slider(
             "Forecast Horizon (Years)",
             min_value=1,
-            max_value=5,
-            value=3,
+            max_value=max_slider_val,
+            value=min(3, max_slider_val),
             step=1,
             key="socio_horizon"
         )
 
     # Extract series
-    socio_series = get_state_time_series(df_socio, sel_socio_state, metric=sel_socio_metric)
+    socio_series = get_state_time_series(df_socio, global_state, metric=sel_socio_metric)
     
     if len(socio_series) < 3:
         st.error("Not enough historical data points to fit an ARIMA model for this metric.")
     else:
-        with st.spinner(f"Optimizing ARIMA model for {sel_socio_metric} in {sel_socio_state}..."):
+        with st.spinner(f"Optimizing ARIMA model for {sel_socio_metric} in {global_state}..."):
             best_socio_fit, best_socio_order, best_socio_aic, _ = find_best_arima_model(socio_series)
-            s_forecast_df, s_combined_df, s_overall_growth = forecast_future_metric(
-                best_socio_fit, socio_series, forecast_years=socio_horizon, metric_name=sel_socio_metric
+            # Internal model ALWAYS computes 5 years (to 2030) as requested
+            s_forecast_df, s_combined_df, _ = forecast_future_metric(
+                best_socio_fit, socio_series, forecast_years=5, metric_name=sel_socio_metric
             )
 
         st.write("")
         sm_col1, sm_col2, sm_col3, sm_col4 = st.columns(4)
 
-        last_s_actual = socio_series.values[-1]
-        target_s_pred = s_forecast_df.iloc[-1][f"Forecasted_{sel_socio_metric}"]
-        target_s_year = int(s_forecast_df.iloc[-1]["Year"])
-        last_s_year = int(socio_series.index[-1])
+        # last_s_actual is the true last actual value (e.g., 2023 for Spend_Per_Visitor_RM)
+        # We find it by looking up the historical value at display_last_year
+        s_hist_df = s_combined_df[s_combined_df["Type"] == "Historical (Actual)"]
+        s_hist_true = s_hist_df[s_hist_df["Year"] <= display_last_year]
+        last_s_actual = s_hist_true["Value"].iloc[-1]
+        
+        # The full projected timeline includes forward-filled years + ARIMA forecasted years
+        s_hist_ffill = s_hist_df[s_hist_df["Year"] > display_last_year]
+        proj_years = s_hist_ffill["Year"].tolist() + s_forecast_df["Year"].tolist()
+        proj_values = s_hist_ffill["Value"].tolist() + s_forecast_df[f"Forecasted_{sel_socio_metric}"].tolist()
+        
+        # Metrics reflect the user's selected slider horizon (socio_horizon)
+        target_s_year = display_last_year + socio_horizon
+        
+        try:
+            target_idx = proj_years.index(target_s_year)
+            target_s_pred = proj_values[target_idx]
+        except ValueError:
+            target_s_pred = proj_values[-1]
+            target_s_year = proj_years[-1]
+            
+        s_overall_growth = ((target_s_pred - last_s_actual) / last_s_actual) * 100
 
         with sm_col1:
             st.markdown(f"""
@@ -758,7 +784,7 @@ with tab_socio:
         with sm_col2:
             st.markdown(f"""
             <div class="metric-card">
-                <div class="metric-title">{last_s_year} Actual ({sel_socio_metric})</div>
+                <div class="metric-title">{display_last_year} Actual ({sel_socio_metric})</div>
                 <div class="metric-value" style="font-size: 1.3rem;">{last_s_actual:,.2f}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -769,7 +795,7 @@ with tab_socio:
             <div class="metric-card">
                 <div class="metric-title">Projected {target_s_year}</div>
                 <div class="metric-value" style="font-size: 1.3rem; color: {s_color};">{target_s_pred:,.2f}</div>
-                <div style="font-size: 0.72rem; color: {s_color};">{s_overall_growth:+.1f}% vs {last_s_year}</div>
+                <div style="font-size: 0.72rem; color: {s_color};">{s_overall_growth:+.1f}% vs {display_last_year}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -786,27 +812,32 @@ with tab_socio:
         # Interactive Forecast Plotly Chart
         fig_s_forecast = go.Figure()
 
-        # Historical Actual Line
-        s_hist_df = s_combined_df[s_combined_df["Type"] == "Historical (Actual)"]
+        # Historical Actual Line (Ends at true last year)
         fig_s_forecast.add_trace(go.Scatter(
-            x=s_hist_df["Year"],
-            y=s_hist_df["Value"],
+            x=s_hist_true["Year"],
+            y=s_hist_true["Value"],
             mode="lines+markers",
             name="Historical Actual",
             line=dict(color="#10b981", width=3.5),
             marker=dict(size=8, color="#10b981")
         ))
 
-        # Forecast Line
-        last_sh_x = [s_hist_df["Year"].iloc[-1]]
-        last_sh_y = [s_hist_df["Value"].iloc[-1]]
+        # Forecast Line (Starts from true last year, converting forward-filled data to dotted line)
+        last_true_x = [s_hist_true["Year"].iloc[-1]]
+        last_true_y = [s_hist_true["Value"].iloc[-1]]
         
-        s_pred_x = last_sh_x + s_forecast_df["Year"].tolist()
-        s_pred_y = last_sh_y + s_forecast_df[f"Forecasted_{sel_socio_metric}"].tolist()
+        s_pred_x = last_true_x + proj_years
+        s_pred_y = last_true_y + proj_values
+
+        # Trim Forecast to match the slider (which is capped at MAX_DISPLAY_YEAR)
+        max_plot_year = min(MAX_DISPLAY_YEAR, display_last_year + socio_horizon)
+        s_pred_filtered = [(x, y) for x, y in zip(s_pred_x, s_pred_y) if x <= max_plot_year]
+        s_pred_x_trim = [p[0] for p in s_pred_filtered]
+        s_pred_y_trim = [p[1] for p in s_pred_filtered]
 
         fig_s_forecast.add_trace(go.Scatter(
-            x=s_pred_x,
-            y=s_pred_y,
+            x=s_pred_x_trim,
+            y=s_pred_y_trim,
             mode="lines+markers",
             name=f"ARIMA{best_socio_order} Forecast",
             line=dict(color="#f59e0b", width=3.5, dash="dash"),
@@ -814,8 +845,9 @@ with tab_socio:
         ))
 
         # 95% CI
-        s_ci_x = s_forecast_df["Year"].tolist() + s_forecast_df["Year"].tolist()[::-1]
-        s_ci_y = s_forecast_df["Upper_CI_95"].tolist() + s_forecast_df["Lower_CI_95"].tolist()[::-1]
+        s_forecast_df_trim = s_forecast_df[s_forecast_df["Year"] <= max_plot_year]
+        s_ci_x = s_forecast_df_trim["Year"].tolist() + s_forecast_df_trim["Year"].tolist()[::-1]
+        s_ci_y = s_forecast_df_trim["Upper_CI_95"].tolist() + s_forecast_df_trim["Lower_CI_95"].tolist()[::-1]
 
         fig_s_forecast.add_trace(go.Scatter(
             x=s_ci_x,
@@ -829,7 +861,7 @@ with tab_socio:
         ))
 
         fig_s_forecast.update_layout(
-            title=f"<b>{sel_socio_metric} Trajectory & Forecast: {sel_socio_state}</b>",
+            title=f"<b>{sel_socio_metric} Trajectory & Forecast: {global_state}</b>",
             template="plotly_dark",
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
@@ -842,3 +874,35 @@ with tab_socio:
 
         st.plotly_chart(fig_s_forecast, use_container_width=True)
 
+# ==============================================================================
+# TAB 4: Glossary Assistant (Chatbot)
+# ==============================================================================
+with tab_chat:
+    st.markdown("### 🤖 Glossary Assistant")
+    st.markdown("Ask me to explain any terms or metrics used in this dashboard!")
+    
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display chat messages from history on app rerun
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # React to user input
+    if prompt := st.chat_input("What does 'ARIMA' or 'K-Means' mean?"):
+        # Display user message in chat message container
+        st.chat_message("user").markdown(prompt)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        # Get assistant response
+        from glossary import find_answer
+        response = find_answer(prompt)
+        
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            st.markdown(response)
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": response})
